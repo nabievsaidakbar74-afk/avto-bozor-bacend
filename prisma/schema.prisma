@@ -1,0 +1,467 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// One account can buy, sell, rent, and rent out cars.
+/// Staff access is `role`. Account state is `status`.
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MODERATOR
+  USER
+
+  @@map("user_role")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  PENDING
+
+  @@map("user_status")
+}
+
+enum FuelType {
+  PETROL
+  DIESEL
+  GAS
+  HYBRID
+  ELECTRIC
+
+  @@map("fuel_type")
+}
+
+enum Transmission {
+  MANUAL
+  AUTOMATIC
+
+  @@map("transmission")
+}
+
+enum BodyType {
+  SEDAN
+  HATCHBACK
+  SUV
+  COUPE
+  WAGON
+  MINIVAN
+  PICKUP
+  VAN
+  CONVERTIBLE
+
+  @@map("body_type")
+}
+
+enum CarStatus {
+  DRAFT
+  PENDING_MODERATION
+  AVAILABLE
+  RESERVED
+  SOLD
+  RENTED
+  INACTIVE
+  REJECTED
+
+  @@map("car_status")
+}
+
+enum ListingType {
+  SALE
+  RENT
+
+  @@map("listing_type")
+}
+
+enum ListingStatus {
+  DRAFT
+  PENDING_MODERATION
+  PUBLISHED
+  PAUSED
+  SOLD
+  RENTED
+  REJECTED
+  EXPIRED
+
+  @@map("listing_status")
+}
+
+enum PurchaseStatus {
+  PENDING
+  CONFIRMED
+  PAID
+  COMPLETED
+  CANCELLED
+  REFUNDED
+
+  @@map("purchase_status")
+}
+
+enum RentalBookingStatus {
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  REJECTED
+
+  @@map("rental_booking_status")
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  HIDDEN
+  REJECTED
+
+  @@map("review_status")
+}
+
+enum NotificationType {
+  PURCHASE
+  SALE
+  RENTAL
+  BOOKING
+  LISTING
+  MODERATION
+  SYSTEM
+
+  @@map("notification_type")
+}
+
+enum ReportStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+
+  @@map("report_status")
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique @db.VarChar(255)
+  phone        String     @unique @db.VarChar(32)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  firstName    String     @map("first_name") @db.VarChar(100)
+  lastName     String     @map("last_name") @db.VarChar(100)
+  avatar       String?    @db.VarChar(512)
+  role         UserRole   @default(USER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  ownedCars         Car[]            @relation("CarOwner")
+  listings          Listing[]        @relation("ListingOwner")
+  purchasesAsBuyer  Purchase[]       @relation("PurchaseBuyer")
+  purchasesAsSeller Purchase[]       @relation("PurchaseSeller")
+  bookingsAsRenter  RentalBooking[]  @relation("BookingRenter")
+  bookingsAsOwner   RentalBooking[]  @relation("BookingOwner")
+  payments          Payment[]
+  favorites         Favorite[]
+  reviewsWritten    Review[]         @relation("ReviewAuthor")
+  reviewsReceived   Review[]         @relation("ReviewTarget")
+  notifications     Notification[]
+  reportsFiled      Report[]         @relation("ReportReporter")
+  reportsAgainst    Report[]         @relation("ReportTargetUser")
+  auditLogs         AuditLog[]
+  refreshTokens     RefreshToken[]
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Car {
+  id               String       @id @default(uuid()) @db.Uuid
+  ownerId          String       @map("owner_id") @db.Uuid
+  brand            String       @db.VarChar(80)
+  model            String       @db.VarChar(80)
+  year             Int
+  price            Decimal      @db.Decimal(14, 2)
+  dailyRentalPrice Decimal?     @map("daily_rental_price") @db.Decimal(14, 2)
+  mileage          Int
+  fuelType         FuelType     @map("fuel_type")
+  transmission     Transmission
+  bodyType         BodyType     @map("body_type")
+  color            String       @db.VarChar(40)
+  engine           String       @db.VarChar(80)
+  description      String       @db.Text
+  location         String       @db.VarChar(120)
+  status           CarStatus    @default(DRAFT)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  owner      User            @relation("CarOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  images     CarImage[]
+  listings   Listing[]
+  purchases  Purchase[]
+  bookings   RentalBooking[]
+  favorites  Favorite[]
+  reviews    Review[]
+  reports    Report[]
+
+  @@index([ownerId])
+  @@index([status, price])
+  @@index([status, createdAt])
+  @@index([brand, model])
+  @@index([location])
+  @@map("cars")
+}
+
+model CarImage {
+  id         String   @id @default(uuid()) @db.Uuid
+  carId      String   @map("car_id") @db.Uuid
+  url        String   @db.VarChar(1024)
+  storageKey String   @unique @map("storage_key") @db.VarChar(512)
+  metadata   Json     @default("{}") @db.JsonB
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  @@index([carId, sortOrder])
+  @@map("car_images")
+}
+
+model Listing {
+  id               String        @id @default(uuid()) @db.Uuid
+  carId            String        @map("car_id") @db.Uuid
+  ownerId          String        @map("owner_id") @db.Uuid
+  type             ListingType
+  status           ListingStatus @default(DRAFT)
+  salePrice        Decimal?      @map("sale_price") @db.Decimal(14, 2)
+  rentalDailyPrice Decimal?      @map("rental_daily_price") @db.Decimal(14, 2)
+  title            String        @db.VarChar(160)
+  description      String        @db.Text
+  publishedAt      DateTime?     @map("published_at") @db.Timestamptz(6)
+  expiresAt        DateTime?     @map("expires_at") @db.Timestamptz(6)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  car     Car      @relation(fields: [carId], references: [id], onDelete: Restrict)
+  owner   User     @relation("ListingOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  reports Report[]
+
+  @@index([carId])
+  @@index([ownerId])
+  @@index([type, status])
+  @@index([status, expiresAt])
+  @@map("listings")
+}
+
+model Purchase {
+  id        String         @id @default(uuid()) @db.Uuid
+  buyerId   String         @map("buyer_id") @db.Uuid
+  sellerId  String         @map("seller_id") @db.Uuid
+  carId     String         @map("car_id") @db.Uuid
+  price          Decimal        @db.Decimal(14, 2)
+  status         PurchaseStatus @default(PENDING)
+  /// Set to carId only when status is COMPLETED. The unique column allows many
+  /// open purchases and rejects a second completed purchase for the same car.
+  completedCarId String?        @unique @map("completed_car_id") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  buyer    User      @relation("PurchaseBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  seller   User      @relation("PurchaseSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  car      Car       @relation(fields: [carId], references: [id], onDelete: Restrict)
+  payments Payment[]
+  reviews  Review[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([carId, status])
+  @@map("purchases")
+}
+
+model RentalBooking {
+  id         String              @id @default(uuid()) @db.Uuid
+  carId      String              @map("car_id") @db.Uuid
+  renterId   String              @map("renter_id") @db.Uuid
+  ownerId    String              @map("owner_id") @db.Uuid
+  startDate  DateTime            @map("start_date") @db.Timestamptz(6)
+  endDate    DateTime            @map("end_date") @db.Timestamptz(6)
+  dailyPrice Decimal             @map("daily_price") @db.Decimal(14, 2)
+  totalPrice Decimal             @map("total_price") @db.Decimal(14, 2)
+  status     RentalBookingStatus @default(PENDING)
+  createdAt  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  car      Car       @relation(fields: [carId], references: [id], onDelete: Restrict)
+  renter   User      @relation("BookingRenter", fields: [renterId], references: [id], onDelete: Restrict)
+  owner    User      @relation("BookingOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  payments Payment[]
+  reviews  Review[]
+
+  @@index([carId, startDate, endDate])
+  @@index([renterId])
+  @@index([ownerId])
+  @@index([status])
+  @@map("rental_bookings")
+}
+
+model Payment {
+  id                    String        @id @default(uuid()) @db.Uuid
+  userId                String        @map("user_id") @db.Uuid
+  purchaseId            String?       @map("purchase_id") @db.Uuid
+  bookingId             String?       @map("booking_id") @db.Uuid
+  amount                Decimal       @db.Decimal(14, 2)
+  currency              String        @default("UZS") @db.Char(3)
+  status                PaymentStatus @default(PENDING)
+  provider              String        @db.VarChar(40)
+  providerTransactionId String?       @unique @map("provider_transaction_id") @db.VarChar(128)
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  purchase Purchase?      @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  booking  RentalBooking? @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([purchaseId])
+  @@index([bookingId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Favorite {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  carId     String   @map("car_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  car  Car  @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, carId])
+  @@index([carId])
+  @@index([userId, createdAt])
+  @@map("favorites")
+}
+
+model Review {
+  id           String       @id @default(uuid()) @db.Uuid
+  authorId     String       @map("author_id") @db.Uuid
+  targetUserId String       @map("target_user_id") @db.Uuid
+  carId        String       @map("car_id") @db.Uuid
+  /// Exactly one of purchaseId or bookingId identifies the completed transaction.
+  purchaseId   String?      @map("purchase_id") @db.Uuid
+  bookingId    String?      @map("booking_id") @db.Uuid
+  rating       Int
+  comment      String       @db.Text
+  status       ReviewStatus @default(PENDING)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  author     User           @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  targetUser User           @relation("ReviewTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  car        Car            @relation(fields: [carId], references: [id], onDelete: Restrict)
+  purchase   Purchase?      @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  booking    RentalBooking? @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  reports    Report[]
+
+  @@unique([purchaseId, authorId])
+  @@unique([bookingId, authorId])
+  @@index([authorId])
+  @@index([targetUserId])
+  @@index([carId, status, createdAt])
+  @@index([status])
+  @@map("reviews")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(160)
+  message   String           @db.Text
+  read      Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
+}
+
+model Report {
+  id           String       @id @default(uuid()) @db.Uuid
+  reporterId   String       @map("reporter_id") @db.Uuid
+  targetUserId String?      @map("target_user_id") @db.Uuid
+  carId        String?      @map("car_id") @db.Uuid
+  listingId    String?      @map("listing_id") @db.Uuid
+  reviewId     String?      @map("review_id") @db.Uuid
+  reason       String       @db.VarChar(120)
+  description  String       @db.Text
+  status       ReportStatus @default(OPEN)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  reporter   User     @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  targetUser User?    @relation("ReportTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  car        Car?     @relation(fields: [carId], references: [id], onDelete: SetNull)
+  listing    Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  review     Review?  @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+
+  @@index([reporterId])
+  @@index([targetUserId])
+  @@index([carId])
+  @@index([listingId])
+  @@index([reviewId])
+  @@index([status])
+  @@index([status, createdAt])
+  @@map("reports")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String   @db.VarChar(120)
+  resource   String   @db.VarChar(80)
+  resourceId String?  @map("resource_id") @db.VarChar(64)
+  metadata   Json     @default("{}") @db.JsonB
+  ip         String?  @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.VarChar(512)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([resource, resourceId])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+/// Stores only a hash of the refresh token. The raw token is never persisted.
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(128)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}

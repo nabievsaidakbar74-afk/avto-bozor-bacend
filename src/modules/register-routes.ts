@@ -1,0 +1,38 @@
+import { Router } from "express";
+import { adminRouter } from "./admin/index.js";
+import { authRouter } from "./auth/index.js";
+import { bookingsRouter, myBookingsRouter, myRentalsRouter } from "./bookings/index.js";
+import { carsRouter } from "./cars/index.js";
+import { favoritesRouter } from "./favorites/index.js";
+import { healthRouter } from "./health/health.routes.js";
+import { listingsRouter, myListingsRouter } from "./listings/index.js";
+import { notificationsRouter } from "./notifications/index.js";
+import { myPaymentsRouter, paymentsRouter } from "./payments/index.js";
+import { rentalsRouter } from "./rentals/index.js";
+import { reportsRouter } from "./reports/index.js";
+import { reviewsRouter } from "./reviews/index.js";
+import { myPurchasesRouter, mySalesRouter, purchasesRouter } from "./purchases/index.js";
+import { usersRouter } from "./users/index.js";
+
+export const apiRouter = Router();
+
+apiRouter.use("/health", healthRouter);
+apiRouter.use("/auth", authRouter);
+apiRouter.use("/users", usersRouter);
+apiRouter.use("/cars", carsRouter);
+apiRouter.use("/listings", listingsRouter);
+apiRouter.use("/my/listings", myListingsRouter);
+apiRouter.use("/my/purchases", myPurchasesRouter);
+apiRouter.use("/my/sales", mySalesRouter);
+apiRouter.use("/my/bookings", myBookingsRouter);
+apiRouter.use("/my/rentals", myRentalsRouter);
+apiRouter.use("/my/payments", myPaymentsRouter);
+apiRouter.use("/purchases", purchasesRouter);
+apiRouter.use("/rentals", rentalsRouter);
+apiRouter.use("/bookings", bookingsRouter);
+apiRouter.use("/payments", paymentsRouter);
+apiRouter.use("/favorites", favoritesRouter);
+apiRouter.use("/reviews", reviewsRouter);
+apiRouter.use("/notifications", notificationsRouter);
+apiRouter.use("/reports", reportsRouter);
+apiRouter.use("/admin", adminRouter);
