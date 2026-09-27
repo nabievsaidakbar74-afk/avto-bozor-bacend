@@ -9,6 +9,6 @@ coverage/
 .vscode/
 .idea/
 *.tsbuildinfo
-storage/
+# storage/
 *.pem
 *.key
