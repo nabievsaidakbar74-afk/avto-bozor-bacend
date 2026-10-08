@@ -10,6 +10,7 @@ import type {
   MyListingsQuery,
   UpdateListingInput,
 } from "./listings.dto.js";
+import { listingOutcomeMessage } from "./listing-moderation.service.js";
 import { listingsService } from "./listings.service.js";
 
 function actor(req: Request): { id: string; role: RoleName } {
@@ -44,14 +45,23 @@ export const listingsController = {
   }),
 
   create: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const listing = await listingsService.create(actor(req).id, req.body as CreateListingInput);
-    sendSuccess(res, "Listing created", { listing }, 201);
+    const result = await listingsService.create(actor(req).id, req.body as CreateListingInput);
+    sendSuccess(
+      res,
+      listingOutcomeMessage(result.moderation, "Listing created"),
+      result.moderation ? { listing: result.listing, moderation: result.moderation } : { listing: result.listing },
+      201,
+    );
   }),
 
   update: asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const params = req.params as unknown as ListingIdParams;
-    const listing = await listingsService.update(actor(req), params.id, req.body as UpdateListingInput);
-    sendSuccess(res, "Listing updated", { listing });
+    const result = await listingsService.update(actor(req), params.id, req.body as UpdateListingInput);
+    sendSuccess(
+      res,
+      listingOutcomeMessage(result.moderation, "Listing updated"),
+      result.moderation ? { listing: result.listing, moderation: result.moderation } : { listing: result.listing },
+    );
   }),
 
   remove: asyncHandler(async (req: Request, res: Response): Promise<void> => {

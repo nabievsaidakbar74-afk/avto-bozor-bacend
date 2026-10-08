@@ -1,7 +1,7 @@
 import { ListingStatus } from "@prisma/client";
 import { AppError } from "../../common/errors/app-error.js";
 
-export type ListingTransitionChannel = "owner" | "moderation" | "transaction";
+export type ListingTransitionChannel = "owner" | "moderation" | "transaction" | "automation";
 
 const ownerTransitions: Record<ListingStatus, readonly ListingStatus[]> = {
   [ListingStatus.DRAFT]: [ListingStatus.PENDING_MODERATION],
@@ -25,6 +25,17 @@ const moderationTransitions: Record<ListingStatus, readonly ListingStatus[]> = {
   [ListingStatus.RENTED]: [],
 };
 
+const automationTransitions: Record<ListingStatus, readonly ListingStatus[]> = {
+  [ListingStatus.DRAFT]: [ListingStatus.PUBLISHED, ListingStatus.PENDING_MODERATION, ListingStatus.REJECTED],
+  [ListingStatus.PENDING_MODERATION]: [ListingStatus.PUBLISHED, ListingStatus.REJECTED],
+  [ListingStatus.PUBLISHED]: [],
+  [ListingStatus.PAUSED]: [ListingStatus.PUBLISHED, ListingStatus.PENDING_MODERATION, ListingStatus.REJECTED],
+  [ListingStatus.REJECTED]: [ListingStatus.PUBLISHED, ListingStatus.PENDING_MODERATION],
+  [ListingStatus.EXPIRED]: [ListingStatus.PUBLISHED, ListingStatus.PENDING_MODERATION, ListingStatus.REJECTED],
+  [ListingStatus.SOLD]: [],
+  [ListingStatus.RENTED]: [],
+};
+
 const transactionTransitions: Record<ListingStatus, readonly ListingStatus[]> = {
   [ListingStatus.DRAFT]: [],
   [ListingStatus.PENDING_MODERATION]: [],
@@ -40,6 +51,7 @@ const channels = {
   owner: ownerTransitions,
   moderation: moderationTransitions,
   transaction: transactionTransitions,
+  automation: automationTransitions,
 } as const;
 
 export function canTransitionListing(

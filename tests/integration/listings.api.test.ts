@@ -219,11 +219,19 @@ describe("listings, moderation, and car images", () => {
       .send({ title: "Hijacked" });
     expect(foreignUpdate.status).toBe(404);
 
+    const photo = await request(app)
+      .post(`/api/v1/cars/${carId}/images`)
+      .set(auth(owner.token))
+      .attach("image", png(300, 300), { filename: "photo.png", contentType: "image/png" });
+    expect(photo.status).toBe(201);
+
     const submitted = await request(app)
       .patch(`/api/v1/listings/${listingId}`)
       .set(auth(owner.token))
-      .send({ status: "PENDING_MODERATION" });
+      .send({ status: "PENDING_MODERATION", description: "Family SUV. Telegram @owner" });
     expect(submitted.status).toBe(200);
+    expect(submitted.body.data.listing.status).toBe("PENDING_MODERATION");
+    expect(submitted.body.data.moderation.reasons).toContain("E'lon qoidalariga mos kelmaydi");
 
     const userQueue = await request(app).get("/api/v1/admin/listings/pending").set(auth(owner.token));
     expect(userQueue.status).toBe(403);
@@ -288,5 +296,70 @@ describe("listings, moderation, and car images", () => {
 
     const unauthenticatedDelete = await request(app).delete(`/api/v1/listings/${listingId}`);
     expect(unauthenticatedDelete.status).toBe(401);
+  });
+
+  it("publishes a clean listing and rejects one that breaks the rules", async () => {
+    const owner = await account(UserRole.USER);
+    const location = `Auto ${randomUUID()}`;
+    const marker = `auto-${randomUUID()}`;
+    const carId = await createCar(owner.token, location);
+    const photo = await request(app)
+      .post(`/api/v1/cars/${carId}/images`)
+      .set(auth(owner.token))
+      .attach("image", png(400, 300), { filename: "front.png", contentType: "image/png" });
+    expect(photo.status).toBe(201);
+
+    const published = await request(app).post("/api/v1/listings").set(auth(owner.token)).send({
+      carId,
+      type: "SALE",
+      title: marker,
+      description: "Serviced family car",
+      salePrice: "21000.00",
+      status: "PENDING_MODERATION",
+    });
+    expect(published.status).toBe(201);
+    expect(published.body.data.listing.status).toBe("PUBLISHED");
+    expect(published.body.data.listing.publishedAt).toEqual(expect.any(String));
+    expect(published.body.data.moderation).toEqual({ status: "PUBLISHED", reasons: [] });
+
+    const visible = await request(app).get("/api/v1/listings").query({ search: marker });
+    expect(visible.status).toBe(200);
+    expect(visible.body.data.listings.map((listing: { id: string }) => listing.id)).toContain(
+      published.body.data.listing.id,
+    );
+
+    const mine = await request(app).get("/api/v1/my/listings").query({ status: "PUBLISHED" }).set(auth(owner.token));
+    expect(mine.body.data.listings.map((listing: { id: string }) => listing.id)).toContain(
+      published.body.data.listing.id,
+    );
+
+    const missingPhotoCar = await createCar(owner.token, `${location}-plain`);
+    const rejected = await request(app).post("/api/v1/listings").set(auth(owner.token)).send({
+      carId: missingPhotoCar,
+      type: "SALE",
+      title: `hidden-${randomUUID()}`,
+      description: "No photo yet",
+      salePrice: "21000.00",
+      status: "PENDING_MODERATION",
+    });
+    expect(rejected.status).toBe(201);
+    expect(rejected.body.data.listing.status).toBe("REJECTED");
+    expect(rejected.body.message).toContain("Rasm talabga javob bermaydi");
+    expect(rejected.body.data.moderation.reasons).toContain("Rasm talabga javob bermaydi");
+
+    const hidden = await request(app).get("/api/v1/listings").query({ search: rejected.body.data.listing.title });
+    expect(hidden.body.data.listings).toHaveLength(0);
+
+    const duplicate = await request(app).post("/api/v1/listings").set(auth(owner.token)).send({
+      carId,
+      type: "SALE",
+      title: `copy-${randomUUID()}`,
+      description: "Same car again",
+      salePrice: "21000.00",
+      status: "PENDING_MODERATION",
+    });
+    expect(duplicate.status).toBe(201);
+    expect(duplicate.body.data.listing.status).toBe("REJECTED");
+    expect(duplicate.body.data.moderation.reasons).toContain("E'lon qoidalariga mos kelmaydi");
   });
 });

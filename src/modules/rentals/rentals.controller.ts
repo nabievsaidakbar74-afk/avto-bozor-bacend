@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { AppError } from "../../common/errors/app-error.js";
 import { sendSuccess } from "../../common/utils/api-response.js";
 import { asyncHandler } from "../../common/utils/async-handler.js";
+import { rentalOutcomeMessage } from "../listings/listing-moderation.service.js";
 import type { PublishRentalInput } from "./rentals.dto.js";
 import { rentalsService } from "./rentals.service.js";
 
@@ -10,7 +11,7 @@ export const rentalsController = {
     if (!req.actor) {
       throw new AppError("Authentication required", 401, "UNAUTHORIZED");
     }
-    const listing = await rentalsService.publish(req.actor.id, req.body as PublishRentalInput);
-    sendSuccess(res, "Rental submitted for moderation", { listing }, 201);
+    const result = await rentalsService.publish(req.actor.id, req.body as PublishRentalInput);
+    sendSuccess(res, rentalOutcomeMessage(result.moderation), { listing: result.listing, moderation: result.moderation }, 201);
   }),
 };

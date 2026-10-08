@@ -25,4 +25,13 @@ describe("listing status transitions", () => {
     expect(canTransitionListing(ListingStatus.RENTED, ListingStatus.PUBLISHED, "transaction")).toBe(true);
     expect(canTransitionListing(ListingStatus.DRAFT, ListingStatus.PUBLISHED, "transaction")).toBe(false);
   });
+
+  it("lets automatic review publish, hold, or reject a submission", () => {
+    expect(canTransitionListing(ListingStatus.DRAFT, ListingStatus.PUBLISHED, "automation")).toBe(true);
+    expect(canTransitionListing(ListingStatus.DRAFT, ListingStatus.PENDING_MODERATION, "automation")).toBe(true);
+    expect(canTransitionListing(ListingStatus.DRAFT, ListingStatus.REJECTED, "automation")).toBe(true);
+    expect(canTransitionListing(ListingStatus.DRAFT, ListingStatus.SOLD, "automation")).toBe(false);
+    expect(canTransitionListing(ListingStatus.PUBLISHED, ListingStatus.REJECTED, "automation")).toBe(false);
+    expect(canTransitionListing(ListingStatus.REJECTED, ListingStatus.PUBLISHED, "automation")).toBe(true);
+  });
 });

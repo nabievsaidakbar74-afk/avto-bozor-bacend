@@ -743,7 +743,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       post: operation({
         tags: ["Listings"],
         summary: "Create a listing",
-        description: `${access("LISTING_CREATE", "the owner of the car")} The car must belong to the caller. ownerId is rejected. Status may be DRAFT or PENDING_MODERATION. A sale listing requires salePrice and must not include rentalDailyPrice. A rental listing requires rentalDailyPrice and must not include salePrice.`,
+        description: `${access("LISTING_CREATE", "the owner of the car")} The car must belong to the caller. ownerId is rejected. The client may send DRAFT or PENDING_MODERATION. DRAFT is saved without review. PENDING_MODERATION runs automatic checks: a clean listing is stored as PUBLISHED, a suspicious listing stays PENDING_MODERATION, and a rule violation is stored as REJECTED. The response includes moderation.reasons. Owners cannot set PUBLISHED directly. A sale listing requires salePrice and must not include rentalDailyPrice. A rental listing requires rentalDailyPrice and must not include salePrice.`,
         body: ref("CreateListingRequest"),
         bodyExample: {
           carId: carExample.id,
@@ -774,7 +774,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       patch: operation({
         tags: ["Listings"],
         summary: "Update a listing",
-        description: `${access("LISTING_UPDATE", "the owner, an admin, or a super admin")} Owners cannot set PUBLISHED, SOLD, or RENTED. A sold or rented listing is locked. Another user receives 404.`,
+        description: `${access("LISTING_UPDATE", "the owner, an admin, or a super admin")} Owners cannot set PUBLISHED, SOLD, or RENTED. Sending PENDING_MODERATION runs the same automatic checks as create. A sold or rented listing is locked. Another user receives 404.`,
         parameters: [pathParam("id", "Listing id.")],
         body: ref("UpdateListingRequest"),
         success: success("Listing updated", dataSchema("listing", ref("Listing"))),
@@ -919,7 +919,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       post: operation({
         tags: ["Rentals"],
         summary: "Publish a rental listing",
-        description: `${access("RENTAL_CREATE", "the car owner")} Creates a RENT listing in PENDING_MODERATION. The daily price is dailyPrice. ownerId is rejected. Title is generated from the car.`,
+        description: `${access("RENTAL_CREATE", "the car owner")} Creates a RENT listing and runs automatic checks. A clean listing is PUBLISHED. A suspicious listing stays PENDING_MODERATION for admin review. A rule violation is REJECTED and moderation.reasons explains why. The daily price is dailyPrice. ownerId is rejected. Title is generated from the car.`,
         body: ref("PublishRentalRequest"),
         status: 201,
         success: success("Rental submitted for moderation", dataSchema("listing", ref("RentalListing")), {

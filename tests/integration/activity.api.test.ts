@@ -17,6 +17,18 @@ function auth(token: string): { Authorization: string } {
   return { Authorization: `Bearer ${token}` };
 }
 
+function png(width: number, height: number): Buffer {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(13, 0);
+  const data = Buffer.alloc(13);
+  data.writeUInt32BE(width, 0);
+  data.writeUInt32BE(height, 4);
+  data[8] = 8;
+  data[9] = 2;
+  return Buffer.concat([signature, length, Buffer.from("IHDR"), data, Buffer.alloc(4)]);
+}
+
 describe("favorites, reviews, and notifications", () => {
   const app = createApp();
   let passwordHash = "";
@@ -371,14 +383,21 @@ describe("favorites, reviews, and notifications", () => {
     expect(ownerNotes.body.data.notifications.some((item: { type: string }) => item.type === "RENTAL")).toBe(true);
     expect(ownerNotes.body.data.notifications.some((item: { type: string }) => item.type === "LISTING")).toBe(true);
 
+    const reviewCar = await carFor(seller.token);
+    const reviewPhoto = await request(app)
+      .post(`/api/v1/cars/${reviewCar}/images`)
+      .set(auth(seller.token))
+      .attach("image", png(300, 300), { filename: "photo.png", contentType: "image/png" });
+    expect(reviewPhoto.status).toBe(201);
     const pendingListing = await request(app).post("/api/v1/listings").set(auth(seller.token)).send({
-      carId: await carFor(seller.token),
+      carId: reviewCar,
       type: "SALE",
       title: "Needs review",
-      description: "Waiting",
+      description: "Waiting on telegram",
       salePrice: "7000.00",
       status: "PENDING_MODERATION",
     });
+    expect(pendingListing.body.data.listing.status).toBe("PENDING_MODERATION");
     const approved = await request(app)
       .post(`/api/v1/admin/listings/${pendingListing.body.data.listing.id as string}/approve`)
       .set(auth(moderator.token));

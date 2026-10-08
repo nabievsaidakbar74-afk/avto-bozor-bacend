@@ -17,6 +17,18 @@ function auth(token: string): { Authorization: string } {
   return { Authorization: `Bearer ${token}` };
 }
 
+function png(width: number, height: number): Buffer {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(13, 0);
+  const data = Buffer.alloc(13);
+  data.writeUInt32BE(width, 0);
+  data.writeUInt32BE(height, 4);
+  data[8] = 8;
+  data[9] = 2;
+  return Buffer.concat([signature, length, Buffer.from("IHDR"), data, Buffer.alloc(4)]);
+}
+
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -175,15 +187,21 @@ describe("admin dashboard", () => {
     });
 
     const pendingCar = await carFor(seller.token, `${location} pending`);
+    const pendingPhoto = await request(app)
+      .post(`/api/v1/cars/${pendingCar}/images`)
+      .set(auth(seller.token))
+      .attach("image", png(300, 300), { filename: "photo.png", contentType: "image/png" });
+    expect(pendingPhoto.status).toBe(201);
     const pendingListing = await request(app).post("/api/v1/listings").set(auth(seller.token)).send({
       carId: pendingCar,
       type: "RENT",
       title: "Waiting",
-      description: "Pending rental",
+      description: "Pending rental. Telegram @seller",
       rentalDailyPrice: "15.00",
       status: "PENDING_MODERATION",
     });
     expect(pendingListing.status).toBe(201);
+    expect(pendingListing.body.data.listing.status).toBe("PENDING_MODERATION");
 
     const rentedCar = await carFor(seller.token, `${location} rented`);
     await PrismaService.client().car.update({ where: { id: rentedCar }, data: { status: "RENTED" } });
