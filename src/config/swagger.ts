@@ -314,6 +314,19 @@ const paginationSchema: OpenAPIV3.SchemaObject = {
   },
 };
 
+const productionApiUrl = "https://avto-bozor-bacend-1.onrender.com";
+
+function openApiServers(): OpenAPIV3.ServerObject[] {
+  const production = { url: productionApiUrl, description: "Production" };
+  if (env.NODE_ENV === "production") {
+    return [production];
+  }
+  return [
+    { url: `http://localhost:${env.PORT}`, description: "Local server" },
+    production,
+  ];
+}
+
 export const openApiDocument: OpenAPIV3.Document = {
   openapi: "3.0.3",
   info: {
@@ -322,7 +335,7 @@ export const openApiDocument: OpenAPIV3.Document = {
     description:
       "Official HTTP contract for the Avto Bozor marketplace. All routes are under /api/v1. Each resource has its own section: customer resources such as Cars and Listings, then the matching admin resources such as Admin Cars and Admin Listings, then Health / System. A success body is { success: true, message, data? }. An error body is { success: false, message, code, details? }. Guests can browse public cars and published listings. Authenticated users buy, sell, rent, and manage their own records. Staff roles are MODERATOR, ADMIN, and SUPER_ADMIN. Send the access token as Authorization: Bearer. The refresh token is an HttpOnly cookie and is not returned in JSON. Do not send ownerId, sellerId, buyerId, renterId, price, or payment amount. The server assigns those values.",
   },
-  servers: [{ url: `http://localhost:${env.PORT}`, description: "Local server" }],
+  servers: openApiServers(),
   tags: [
     {
       name: "Authentication",
