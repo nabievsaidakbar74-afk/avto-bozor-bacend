@@ -87,7 +87,7 @@ describe("OpenAPI contract", () => {
     }
   });
 
-  it("publishes the resource schemas and shared error responses", () => {
+  it("publishes the resource schemas", () => {
     const schemas = openApiDocument.components?.schemas ?? {};
     for (const name of [
       "User",
@@ -105,11 +105,6 @@ describe("OpenAPI contract", () => {
       "ErrorResponse",
     ]) {
       expect(schemas[name], name).toBeDefined();
-    }
-
-    const responses = openApiDocument.components?.responses ?? {};
-    for (const name of ["BadRequest", "Unauthorized", "Forbidden", "NotFound", "Conflict", "ValidationError", "TooManyRequests", "InternalError"]) {
-      expect(responses[name], name).toBeDefined();
     }
 
     expect(JSON.stringify(openApiDocument)).not.toMatch(/postgresql:\/\/|DATABASE_URL|JWT_SECRET/);

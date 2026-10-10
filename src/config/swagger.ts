@@ -47,29 +47,6 @@ function message(description: string, exampleMessage: string): Response {
   });
 }
 
-const errors = {
-  "400": { $ref: "#/components/responses/BadRequest" },
-  "401": { $ref: "#/components/responses/Unauthorized" },
-  "403": { $ref: "#/components/responses/Forbidden" },
-  "404": { $ref: "#/components/responses/NotFound" },
-  "409": { $ref: "#/components/responses/Conflict" },
-  "422": { $ref: "#/components/responses/ValidationError" },
-  "429": { $ref: "#/components/responses/TooManyRequests" },
-  "415": { $ref: "#/components/responses/UnsupportedMedia" },
-  "500": { $ref: "#/components/responses/InternalError" },
-} satisfies Record<string, OpenAPIV3.ReferenceObject>;
-
-function withErrors(
-  response: Record<string, Response | OpenAPIV3.ReferenceObject>,
-  codes: Array<keyof typeof errors>,
-): Operation["responses"] {
-  const selected: Operation["responses"] = { ...response };
-  for (const code of codes) {
-    selected[code] = errors[code];
-  }
-  return selected;
-}
-
 function query(name: string, schema: OpenAPIV3.SchemaObject, description: string): OpenAPIV3.ParameterObject {
   return { name, in: "query", required: false, description, schema };
 }
@@ -102,8 +79,6 @@ function operation(input: {
   body?: Schema;
   bodyExample?: unknown;
   success: Response;
-  errors: Array<keyof typeof errors>;
-  extraResponses?: Operation["responses"];
 }): Operation {
   return {
     tags: input.tags,
@@ -123,8 +98,7 @@ function operation(input: {
         }
       : undefined,
     responses: {
-      ...withErrors({ [String(input.status ?? 200)]: input.success }, input.errors),
-      ...input.extraResponses,
+      [String(input.status ?? 200)]: input.success,
     },
   };
 }
@@ -441,14 +415,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           success: true,
           message: "API is healthy",
         }),
-        errors: ["429", "500"],
-        extraResponses: {
-          "503": json("Database is unavailable", ref("ErrorResponse"), {
-            success: false,
-            message: "Database is unavailable",
-            code: "DATABASE_UNAVAILABLE",
-          }),
-        },
       }),
     },
     "/api/v1/auth/register": {
@@ -471,7 +437,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Account created",
           data: { user: userExample },
         }),
-        errors: ["400", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/auth/login": {
@@ -487,7 +452,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Login successful",
           data: { accessToken: "<access-token>", user: userExample },
         }),
-        errors: ["400", "401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/auth/refresh": {
@@ -503,7 +467,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Session refreshed",
           data: { accessToken: "<access-token>", user: userExample },
         }),
-        errors: ["401", "403", "415", "429", "500"],
       }),
     },
     "/api/v1/auth/logout": {
@@ -515,7 +478,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         body: { type: "object", additionalProperties: false },
         bodyExample: {},
         success: message("Logged out", "Logged out"),
-        errors: ["415", "429", "500"],
       }),
     },
     "/api/v1/auth/me": {
@@ -528,7 +490,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Authenticated user",
           data: { user: userExample },
         }),
-        errors: ["401", "403", "429", "500"],
       }),
     },
     "/api/v1/users/me": {
@@ -537,7 +498,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         summary: "Get my profile",
         description: access("USER_READ", "the authenticated user"),
         success: success("Profile", dataSchema("user", ref("User"))),
-        errors: ["401", "403", "429", "500"],
       }),
       patch: operation({
         tags: ["Users"],
@@ -545,7 +505,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("USER_UPDATE", "the authenticated user")} At least one of email, phone, firstName, lastName, or avatar is required. Role, status, and passwordHash are rejected. Avatar must be an https URL or a path under /uploads/. Email and phone must stay unique.`,
         body: ref("UpdateProfileRequest"),
         success: success("Profile updated", dataSchema("user", ref("User"))),
-        errors: ["400", "401", "403", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/cars": {
@@ -583,7 +542,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Cars",
           data: { cars: [carExample], pagination: { page: 1, limit: 20, total: 1, totalPages: 1 } },
         }),
-        errors: ["422", "429", "500"],
       }),
       post: operation({
         tags: ["Cars"],
@@ -611,7 +569,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Car created",
           data: { car: carExample },
         }),
-        errors: ["400", "401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/cars/{id}": {
@@ -626,7 +583,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Car",
           data: { car: carExample },
         }),
-        errors: ["404", "422", "429", "500"],
       }),
       patch: operation({
         tags: ["Cars"],
@@ -635,7 +591,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         parameters: [pathParam("id", "Car id.")],
         body: ref("UpdateCarRequest"),
         success: success("Car updated", dataSchema("car", ref("Car"))),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
       delete: operation({
         tags: ["Cars"],
@@ -643,7 +598,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("CAR_DELETE", "the owner, an admin, or a super admin")} Sets status to INACTIVE. The row is not removed. Another user receives 404.`,
         parameters: [pathParam("id", "Car id.")],
         success: success("Car deactivated", dataSchema("car", ref("Car"))),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/cars/{carId}/images": {
@@ -668,9 +622,9 @@ export const openApiDocument: OpenAPIV3.Document = {
             },
           },
         },
-        responses: withErrors({
+        responses: {
           "201": success("Image stored", dataSchema("image", ref("CarImage"))),
-        }, ["401", "403", "404", "409", "422", "429", "500"]),
+        },
       },
     },
     "/api/v1/cars/{carId}/images/order": {
@@ -685,7 +639,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["images"],
           properties: { images: { type: "array", items: ref("CarImage") } },
         }),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/cars/{carId}/images/{imageId}/main": {
@@ -699,7 +652,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["images"],
           properties: { images: { type: "array", items: ref("CarImage") } },
         }),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/cars/{carId}/images/{imageId}": {
@@ -709,7 +661,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("CAR_DELETE", "the owner, an admin, or a super admin")} Removes the database row and the stored file.`,
         parameters: [pathParam("carId", "Car id."), pathParam("imageId", "Image id.")],
         success: message("Image deleted", "Image deleted"),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/cars/{carId}/reviews": {
@@ -724,7 +675,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["reviews", "pagination"],
           properties: { reviews: { type: "array", items: ref("Review") }, pagination: paginationSchema },
         }),
-        errors: ["422", "429", "500"],
       }),
     },
     "/api/v1/listings": {
@@ -751,7 +701,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["listings", "pagination"],
           properties: { listings: { type: "array", items: ref("Listing") }, pagination: paginationSchema },
         }),
-        errors: ["422", "429", "500"],
       }),
       post: operation({
         tags: ["Listings"],
@@ -771,7 +720,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Listing created",
           data: { listing: listingExample },
         }),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/listings/{id}": {
@@ -782,7 +730,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         auth: false,
         parameters: [pathParam("id", "Listing id.")],
         success: success("Listing", dataSchema("listing", ref("Listing"))),
-        errors: ["404", "422", "429", "500"],
       }),
       patch: operation({
         tags: ["Listings"],
@@ -791,7 +738,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         parameters: [pathParam("id", "Listing id.")],
         body: ref("UpdateListingRequest"),
         success: success("Listing updated", dataSchema("listing", ref("Listing"))),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
       delete: operation({
         tags: ["Listings"],
@@ -799,7 +745,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("LISTING_DELETE", "the owner, an admin, or a super admin")} Sold and rented listings cannot be deleted.`,
         parameters: [pathParam("id", "Listing id.")],
         success: message("Listing deleted", "Listing deleted"),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/my/listings": {
@@ -819,7 +764,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["listings", "pagination"],
           properties: { listings: { type: "array", items: ref("Listing") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/purchases": {
@@ -835,7 +779,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Purchase created",
           data: { purchase: purchaseExample },
         }),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/purchases/{id}": {
@@ -845,7 +788,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("SALE_READ", "the buyer or the seller")} Anyone else receives 404.`,
         parameters: [pathParam("id", "Purchase id.")],
         success: success("Purchase", dataSchema("purchase", ref("Purchase"))),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/purchases/{id}/confirm": {
@@ -855,7 +797,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("SALE_CREATE", "the seller")} Moves PENDING to CONFIRMED.`,
         parameters: [pathParam("id", "Purchase id.")],
         success: success("Purchase confirmed", dataSchema("purchase", ref("Purchase"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/purchases/{id}/cancel": {
@@ -865,7 +806,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("SALE_CREATE", "the buyer or the seller")} Allowed from PENDING or CONFIRMED. The car becomes AVAILABLE. An unexpired sale listing becomes PUBLISHED.`,
         parameters: [pathParam("id", "Purchase id.")],
         success: success("Purchase cancelled", dataSchema("purchase", ref("Purchase"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/purchases/{id}/pay": {
@@ -875,7 +815,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("SALE_CREATE", "the buyer")} Moves CONFIRMED to PAID. The amount is the purchase price already stored.`,
         parameters: [pathParam("id", "Purchase id.")],
         success: success("Purchase paid", dataSchema("purchase", ref("Purchase"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/purchases/{id}/complete": {
@@ -885,7 +824,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("SALE_CREATE", "the seller")} Moves PAID to COMPLETED. The car and the sale listing both become SOLD.`,
         parameters: [pathParam("id", "Purchase id.")],
         success: success("Purchase completed", dataSchema("purchase", ref("Purchase"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/my/purchases": {
@@ -905,7 +843,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["purchases", "pagination"],
           properties: { purchases: { type: "array", items: ref("Purchase") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/my/sales": {
@@ -925,7 +862,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["purchases", "pagination"],
           properties: { purchases: { type: "array", items: ref("Purchase") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/rentals": {
@@ -951,7 +887,6 @@ export const openApiDocument: OpenAPIV3.Document = {
             },
           },
         }),
-        errors: ["400", "401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/my/rentals": {
@@ -970,7 +905,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["bookings", "pagination"],
           properties: { bookings: { type: "array", items: ref("RentalBooking") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/bookings": {
@@ -986,7 +920,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Booking requested",
           data: { booking: bookingExample },
         }),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/bookings/{id}/confirm": {
@@ -996,7 +929,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("BOOKING_UPDATE", "the car owner")} Moves PENDING to CONFIRMED after rechecking overlap and an open purchase. The renter receives 403. A stranger receives 404.`,
         parameters: [pathParam("id", "Booking id.")],
         success: success("Booking confirmed", dataSchema("booking", ref("RentalBooking"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/bookings/{id}/reject": {
@@ -1006,7 +938,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("BOOKING_UPDATE", "the car owner")} Moves PENDING to REJECTED and cancels an open payment.`,
         parameters: [pathParam("id", "Booking id.")],
         success: success("Booking rejected", dataSchema("booking", ref("RentalBooking"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/bookings/{id}/cancel": {
@@ -1016,7 +947,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("BOOKING_UPDATE", "the renter or the owner")} Allowed from PENDING or CONFIRMED. If no CONFIRMED or ACTIVE booking remains, a rented car becomes AVAILABLE and its rental listing becomes PUBLISHED.`,
         parameters: [pathParam("id", "Booking id.")],
         success: success("Booking cancelled", dataSchema("booking", ref("RentalBooking"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/bookings/{id}/complete": {
@@ -1026,7 +956,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("BOOKING_UPDATE", "the car owner")} Moves ACTIVE to COMPLETED. The renter receives 403. A stranger receives 404. If no other CONFIRMED or ACTIVE booking remains, the car becomes AVAILABLE and the rental listing becomes PUBLISHED.`,
         parameters: [pathParam("id", "Booking id.")],
         success: success("Booking completed", dataSchema("booking", ref("RentalBooking"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/my/bookings": {
@@ -1045,7 +974,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["bookings", "pagination"],
           properties: { bookings: { type: "array", items: ref("RentalBooking") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/payments": {
@@ -1056,7 +984,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         body: ref("CreatePaymentRequest"),
         status: 201,
         success: success("Payment created", dataSchema("payment", ref("Payment"))),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/payments/{id}": {
@@ -1066,7 +993,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("PAYMENT_READ", "the payer, an admin, or a super admin")} Anyone else receives 404.`,
         parameters: [pathParam("id", "Payment id.")],
         success: success("Payment", dataSchema("payment", ref("Payment"))),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/payments/{id}/pay": {
@@ -1076,7 +1002,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("PAYMENT_READ", "the payer")} A purchase must be CONFIRMED. A confirmed booking becomes ACTIVE, the car becomes RENTED, and the rental listing becomes RENTED. The amount is not taken from the client.`,
         parameters: [pathParam("id", "Payment id.")],
         success: success("Payment completed", dataSchema("payment", ref("Payment"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/payments/{id}/cancel": {
@@ -1086,7 +1011,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("PAYMENT_READ", "the payer")} Cancels the open payment and the related purchase or confirmed booking.`,
         parameters: [pathParam("id", "Payment id.")],
         success: success("Payment cancelled", dataSchema("payment", ref("Payment"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/my/payments": {
@@ -1104,7 +1028,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["payments", "pagination"],
           properties: { payments: { type: "array", items: ref("Payment") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/favorites": {
@@ -1118,7 +1041,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["favorites", "pagination"],
           properties: { favorites: { type: "array", items: ref("Favorite") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/favorites/{carId}": {
@@ -1129,7 +1051,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         parameters: [pathParam("carId", "Car id.")],
         status: 201,
         success: success("Favorite saved", dataSchema("favorite", ref("Favorite"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
       delete: operation({
         tags: ["Favorites"],
@@ -1137,7 +1058,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("FAVORITE_MANAGE", "the authenticated user")} Another user's favorite returns 404.`,
         parameters: [pathParam("carId", "Car id.")],
         success: message("Favorite removed", "Car removed from favorites"),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/reviews": {
@@ -1148,7 +1068,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         body: ref("CreateReviewRequest"),
         status: 201,
         success: success("Review published", dataSchema("review", ref("Review"))),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/notifications": {
@@ -1166,7 +1085,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["notifications", "pagination"],
           properties: { notifications: { type: "array", items: ref("Notification") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/notifications/read-all": {
@@ -1183,7 +1101,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Notifications marked as read",
           data: { updated: 3 },
         }),
-        errors: ["401", "403", "429", "500"],
       }),
     },
     "/api/v1/notifications/{id}/read": {
@@ -1193,7 +1110,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("NOTIFICATION_READ", "the notification owner")} Another user's notification returns 404.`,
         parameters: [pathParam("id", "Notification id.")],
         success: success("Notification marked as read", dataSchema("notification", ref("Notification"))),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/reports": {
@@ -1204,7 +1120,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         body: ref("CreateReportRequest"),
         status: 201,
         success: success("Report submitted", dataSchema("report", ref("Report"))),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
       get: operation({
         tags: ["Reports"],
@@ -1220,7 +1135,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["reports", "pagination"],
           properties: { reports: { type: "array", items: ref("Report") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/reports/{id}": {
@@ -1230,7 +1144,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: "Authentication required. A report created by someone else returns 404. Users cannot change the moderation status.",
         parameters: [pathParam("id", "Report id.")],
         success: success("Report", dataSchema("report", ref("Report"))),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/listings/pending": {
@@ -1248,7 +1161,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["listings", "pagination"],
           properties: { listings: { type: "array", items: ref("Listing") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/listings/{id}/approve": {
@@ -1258,7 +1170,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("LISTING_MODERATE", "a moderator, admin, or super admin")} Moves PENDING_MODERATION to PUBLISHED.`,
         parameters: [pathParam("id", "Listing id.")],
         success: success("Listing approved", dataSchema("listing", ref("Listing"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/listings/{id}/reject": {
@@ -1269,7 +1180,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         parameters: [pathParam("id", "Listing id.")],
         body: ref("RejectListingRequest"),
         success: success("Listing rejected", dataSchema("listing", ref("Listing"))),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/reports": {
@@ -1287,7 +1197,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["reports", "pagination"],
           properties: { reports: { type: "array", items: ref("Report") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/reports/{id}": {
@@ -1298,7 +1207,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         parameters: [pathParam("id", "Report id.")],
         body: ref("UpdateReportRequest"),
         success: success("Report updated", dataSchema("report", ref("Report"))),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/dashboard": {
@@ -1311,7 +1219,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           message: "Dashboard",
           data: { dashboard: dashboardExample },
         }),
-        errors: ["401", "403", "429", "500"],
       }),
     },
     "/api/v1/admin/analytics/sales": {
@@ -1321,7 +1228,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("DASHBOARD_READ", "an admin or super admin")} period is 7d, 30d, 90d, or 1y. Empty buckets are zero.`,
         parameters: [query("period", { type: "string", enum: ["7d", "30d", "90d", "1y"], default: "30d" }, "Aggregation window.")],
         success: success("Sales series", ref("AnalyticsSeries")),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/analytics/rentals": {
@@ -1331,7 +1237,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: access("DASHBOARD_READ", "an admin or super admin"),
         parameters: [query("period", { type: "string", enum: ["7d", "30d", "90d", "1y"], default: "30d" }, "Aggregation window.")],
         success: success("Rental series", ref("AnalyticsSeries")),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/analytics/users": {
@@ -1341,7 +1246,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: access("DASHBOARD_READ", "an admin or super admin"),
         parameters: [query("period", { type: "string", enum: ["7d", "30d", "90d", "1y"], default: "30d" }, "Aggregation window.")],
         success: success("User series", ref("CountSeries")),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/analytics/revenue": {
@@ -1351,7 +1255,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: access("DASHBOARD_READ", "an admin or super admin"),
         parameters: [query("period", { type: "string", enum: ["7d", "30d", "90d", "1y"], default: "30d" }, "Aggregation window.")],
         success: success("Revenue series", ref("RevenueSeries")),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/users": {
@@ -1373,7 +1276,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["users", "pagination"],
           properties: { users: { type: "array", items: ref("User") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/users/{id}": {
@@ -1383,7 +1285,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: access("USER_READ", "an admin or super admin"),
         parameters: [pathParam("id", "User id.")],
         success: success("User", dataSchema("user", ref("User"))),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/users/{id}/status": {
@@ -1394,7 +1295,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         parameters: [pathParam("id", "User id.")],
         body: ref("UpdateUserStatusRequest"),
         success: success("Status updated", dataSchema("user", ref("User"))),
-        errors: ["400", "401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/cars": {
@@ -1415,7 +1315,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["cars", "pagination"],
           properties: { cars: { type: "array", items: ref("AdminCar") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/listings": {
@@ -1435,7 +1334,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["listings", "pagination"],
           properties: { listings: { type: "array", items: ref("AdminListing") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/bookings": {
@@ -1453,7 +1351,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["bookings", "pagination"],
           properties: { bookings: { type: "array", items: ref("AdminBooking") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/sales": {
@@ -1473,7 +1370,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["purchases", "pagination"],
           properties: { purchases: { type: "array", items: ref("Purchase") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/sales/{id}": {
@@ -1483,7 +1379,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: access("SALE_READ", "an admin or super admin"),
         parameters: [pathParam("id", "Purchase id.")],
         success: success("Purchase", dataSchema("purchase", ref("Purchase"))),
-        errors: ["401", "403", "404", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/sales/{id}/status": {
@@ -1494,7 +1389,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         parameters: [pathParam("id", "Purchase id.")],
         body: ref("UpdatePurchaseStatusRequest"),
         success: success("Purchase updated", dataSchema("purchase", ref("Purchase"))),
-        errors: ["400", "401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/payments": {
@@ -1512,7 +1406,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["payments", "pagination"],
           properties: { payments: { type: "array", items: ref("Payment") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/payments/{id}/refund": {
@@ -1522,7 +1415,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         description: `${access("PAYMENT_READ", "an admin or super admin")} Refunds a paid or completed purchase. The car becomes AVAILABLE. An unexpired sale listing becomes PUBLISHED. A normal user receives 403.`,
         parameters: [pathParam("id", "Payment id.")],
         success: success("Payment refunded", dataSchema("payment", ref("Payment"))),
-        errors: ["401", "403", "404", "409", "422", "429", "500"],
       }),
     },
     "/api/v1/admin/audit-logs": {
@@ -1544,7 +1436,6 @@ export const openApiDocument: OpenAPIV3.Document = {
           required: ["logs", "pagination"],
           properties: { logs: { type: "array", items: ref("AuditLog") }, pagination: paginationSchema },
         }),
-        errors: ["401", "403", "422", "429", "500"],
       }),
     },
   },
@@ -1556,54 +1447,6 @@ export const openApiDocument: OpenAPIV3.Document = {
         bearerFormat: "JWT",
         description: "Access token from login or refresh. The refresh token is an HttpOnly cookie and is not sent here.",
       },
-    },
-    responses: {
-      BadRequest: json("Malformed JSON", ref("ErrorResponse"), {
-        success: false,
-        message: "Malformed JSON body",
-        code: "MALFORMED_JSON",
-      }),
-      Unauthorized: json("Missing or invalid access token, or an invalid refresh session", ref("ErrorResponse"), {
-        success: false,
-        message: "Authentication required",
-        code: "UNAUTHORIZED",
-      }),
-      Forbidden: json("Authenticated, but the role or permission does not allow this action", ref("ErrorResponse"), {
-        success: false,
-        message: "You do not have access to this resource",
-        code: "FORBIDDEN",
-      }),
-      NotFound: json("The resource does not exist, or it belongs to someone else", ref("ErrorResponse"), {
-        success: false,
-        message: "Resource not found",
-        code: "NOT_FOUND",
-      }),
-      Conflict: json("The state change or unique value is not allowed", ref("ErrorResponse"), {
-        success: false,
-        message: "This status change is not allowed",
-        code: "INVALID_STATUS_TRANSITION",
-      }),
-      ValidationError: json("The body, query, or path failed validation", ref("ErrorResponse"), {
-        success: false,
-        message: "Validation failed",
-        code: "VALIDATION_ERROR",
-        details: [{ path: "price", message: "Enter a valid amount" }],
-      }),
-      TooManyRequests: json("The IP exceeded the rate limit", ref("ErrorResponse"), {
-        success: false,
-        message: "Too many requests",
-        code: "RATE_LIMITED",
-      }),
-      UnsupportedMedia: json("Cookie session routes require Content-Type: application/json", ref("ErrorResponse"), {
-        success: false,
-        message: "JSON content type is required",
-        code: "UNSUPPORTED_MEDIA_TYPE",
-      }),
-      InternalError: json("Unexpected server error. No connection string or stack trace is returned.", ref("ErrorResponse"), {
-        success: false,
-        message: "Internal server error",
-        code: "INTERNAL_ERROR",
-      }),
     },
     schemas: {
       SuccessEnvelope: {
